@@ -1,4 +1,38 @@
+import numpy as np
+from keras.optimizers import SGD
+
 from c4bot import agent
+
+class ZeroEncoder():
+    def __init__(self):
+        # Planes:
+        # 0 -> can be reached immediately
+        # 1 - 5 -> needs 1 - 5 moves in column to be reached
+        # our pieces
+        # opponent pieces
+        self.num_planes = 8
+
+    def encode(self, game_state):
+        board_tensor = np.zeros(self.shape())
+        next_player = game_state.next_player
+      
+        for column in range(7):
+            height = game_state.board.heights[column]
+            for row in range(6):
+                slot = game_state.board.get(column, row)
+                if slot is not None:
+                    if slot == next_player:
+                        board_tensor[6][row][column] = 1
+                    else:
+                        board_tensor[7][row][column] = 1
+
+                if row == height:
+                    board_tensor[height][row][column] = 1
+
+        return board_tensor
+
+    def shape(self):
+        return self.num_planes, 6, 7
 
 class Branch:
     def __init__(self, prior):
@@ -72,7 +106,46 @@ class ZeroExperienceCollector:
         self.visit_counts += self._current_episode_visit_counts
         self.rewards += [reward for _ in range(num_states)]
 
+class ZeroExperienceBuffer:
+    def __init__(self, states, visit_counts, rewards):
+        self.states = states
+        self.visit_counts = visit_counts
+        self.rewards = rewards
+
+    def serialize(self, h5file):
+        h5file.create_group('experience')
+        h5file['experience'].create_dataset('states', data=self.states)
+        h5file['experience'].create_dataset('visit_counts', data=self.visit_counts)
+        h5file['experience'].create_dataset('rewards', data=self.rewards)
+
+    @classmethod
+    def combine_experience(cls, collectors):
+        combined_states = np.concatenate([np.array(c.states) for c in collectors])
+        combined_visit_counts = np.concatenate([np.array(c.visit_counts) for c in collectors])
+        combined_rewards = np.concatenate([np.array(c.rewards) for c in collectors])
+        return ZeroExperienceBuffer(combined_states, combined_visit_counts, combined_rewards)
+
+    @classmethod
+    def load_experience(cls, h5file):
+        states = np.array(h5file['experience']['states'])
+        visit_counts = np.array(h5file['experience']['visit_counts'])
+        rewards = np.array(h5file['experience']['rewards'])
+        return ZeroExperienceBuffer(states, visit_counts, rewards)
+
+
 class ZeroAgent(agent.Agent):
+    def __init__(self, model, encoder, rounds_per_move=1600, c=2.0):
+        self.model = model
+        self.encoder = encoder
+
+        self.collector = None
+
+        self.num_rounds = rounds_per_move
+        self.c = c
+
+    def set_collector(self, collector):
+        self.collector = collector
+
     def select_branch(self, node):
         total_n = node.total_visit_count
 
@@ -91,7 +164,7 @@ class ZeroAgent(agent.Agent):
             node = root
             next_move = self.select_branch(node)
             while node.has_child(next_move):
-                node = node.get_child(next_move):
+                node = node.get_child(next_move)
                 next_move = self.select_branch(next_move)
 
             new_state = node.state.apply_move(next_move)
@@ -132,30 +205,6 @@ class ZeroAgent(agent.Agent):
         if parent is not None:
             parent.add_child(move, new_node)
         return new_node
-
-    def simulate_game(red_agent, red_collector, yellow_agent, yellow_collector):
-        game_state = GameState.new_game()
-        agents = {
-            Player.red: red_agent,
-            Player.yellow: yellow_agent
-        }
-
-        red_collector.begin_episode()
-        yellow_collector.begin_episode()
-        while not game_state.is_over():
-            next_move = agents[game_state.next_player].select_move(game_state)
-            game_state = game_state.apply_move(next_move)
-
-        if game_state.board.is_winning_move(game_state.last_move):
-            if game_state.next_player == Player.red:
-                red_collector.complete_episode(-1)
-                yellow_collector.complete_episode(1)
-            else:
-                red_collector.complete_episode(1)
-                yellow_collector.complete_episode(-1)
-        else:
-            red_collector.complete_episode(0)
-            yellow_collector.complete_episode(0)
 
     def train(self, experience, learning_rate, batch_size):
         num_examples = experience.states.shape[0]
