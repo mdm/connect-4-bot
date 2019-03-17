@@ -8,6 +8,7 @@ verify_ssl = true
 [packages]
 tensorflow = "*"
 keras = "*"
+h5py = "*"
 
 [requires]
 python_version = "3.6"

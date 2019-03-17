@@ -1,5 +1,5 @@
 from keras.layers import Input, Conv2D, Flatten, Dense
-from keras.models import Model
+from keras.models import Model, load_model
 
 from c4bot import c4types
 from c4bot import c4board
@@ -61,14 +61,19 @@ model = Model(
     outputs=[policy_output, value_output]
 )
 
-red_agent = zero.ZeroAgent(model, encoder, rounds_per_move=10, c=2.0)
-yellow_agent = zero.ZeroAgent(model, encoder, rounds_per_move=10, c=2.0)
+model = load_model('best.h5')
+
+rounds_per_move = 1600
+red_agent = zero.ZeroAgent(model, encoder, rounds_per_move=rounds_per_move, c=2.0)
+yellow_agent = zero.ZeroAgent(model, encoder, rounds_per_move=rounds_per_move, c=2.0)
 collector1 = zero.ZeroExperienceCollector()
 collector2 = zero.ZeroExperienceCollector()
 red_agent.set_collector(collector1)
 yellow_agent.set_collector(collector2)
 
-for i in range(5):
+for i in range(10000):
+    if i % 100 == 0:
+        print(i)
     simulate_game(red_agent, collector1, yellow_agent, collector2)
 
 experience = zero.ZeroExperienceBuffer.combine_experience([collector1, collector2])
