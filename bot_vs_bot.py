@@ -12,14 +12,14 @@ def main():
     encoder = agent.ZeroEncoder()
     bots = {
         c4types.Player.red: agent.ZeroAgent(latest_model, encoder),
-        # c4types.Player.yellow: agent.ZeroAgent(best_model, encoder),
-        c4types.Player.yellow: agent.MCTSAgent(1000, 1.5),
+        c4types.Player.yellow: agent.ZeroAgent(best_model, encoder),
+        # c4types.Player.yellow: agent.MCTSAgent(1000, 1.5),
     }
     wins = {
         c4types.Player.red: 0,
         c4types.Player.yellow: 0,
     }
-    total_games = 10
+    total_games = 1000
     for i in range(total_games):
         if i % 100 ==0:
             print(i)
@@ -27,9 +27,9 @@ def main():
         while not game.is_over():
             # time.sleep(0.3)
             # print(chr(27) + '[2J')
-            print_board(game.board)
+            # print_board(game.board)
             bot_move = bots[game.next_player].select_move(game)
-            print_move(game.next_player, bot_move)
+            # print_move(game.next_player, bot_move)
             game = game.apply_move(bot_move)
         if game.board.is_winning_move(game.last_move):
             wins[game.next_player.other] += 1
