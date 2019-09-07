@@ -178,12 +178,13 @@ class ZeroAgent(agent.Agent):
                 node = node.parent
                 value = -1 * value
 
-            if self.collector is not None:
-                root_state_tensor = self.encoder.encode(game_state)
-                visit_counts = np.array([root.visit_count(column) for column in range(7)])
-                self.collector.record_decision(root_state_tensor, visit_counts)
+        if self.collector is not None:
+            root_state_tensor = self.encoder.encode(game_state)
+            visit_counts = np.array([root.visit_count(column) for column in range(7)])
+            print(visit_counts)
+            self.collector.record_decision(root_state_tensor, visit_counts)
 
-            return max(root.moves(), key=root.visit_count)
+        return max(root.moves(), key=root.visit_count)
 
     def create_node(self, game_state, move=None, parent=None)        :
         state_tensor = self.encoder.encode(game_state)
