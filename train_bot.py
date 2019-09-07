@@ -133,7 +133,7 @@ cycle = 1
 while True:
     print('Training cycle {}:'.format(cycle))
     print('Collecting experience...')
-    experience, agent = gain_experience(model, 10000, 1600)
+    experience, agent = gain_experience(model, 1000, 200)
     print('Training model...')
     agent.train(experience, 0.01, 2048)
     print('Evaluating model...')
