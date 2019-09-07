@@ -1,0 +1,9 @@
+* Define kernel size to use for convolutions
+  * 3x3 (look at immediate neighbors)
+  * 7x7 (look at full environment; might not make sense -> board is 7x6)
+  * a combination of the two
+* Use encoder to spefcify value of moves based on chain completion
+ * Use 0 or -1 for chain that are not completable
+* Show that distribution clipping is always safe
+
+* test if there is enough exploration in training

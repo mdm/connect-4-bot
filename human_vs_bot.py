@@ -1,11 +1,15 @@
+from keras.models import Model, load_model
+
 from c4bot import agent
 from c4bot import c4board
 from c4bot import c4types
 from c4bot.utils import print_board, print_move
 
 def main():
+    model = load_model('latest.h5')
+    encoder = agent.ZeroEncoder()
+    bot = agent.ZeroAgent(model, encoder)
     game = c4board.GameState.new_game()
-    bot = agent.MCTSAgent(10000, 1.5)
     while not game.is_over():
         print(chr(27) + '[2J')
         print_board(game.board)

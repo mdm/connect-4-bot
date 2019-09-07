@@ -215,4 +215,3 @@ class ZeroAgent(agent.Agent):
 
         self.model.compile(SGD(lr=learning_rate), loss=['categorical_crossentropy', 'mse'])
         self.model.fit(model_input, [action_target, value_target], batch_size=batch_size)
-        self.model.save('latest.h5')
