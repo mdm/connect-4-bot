@@ -115,29 +115,29 @@ def evaluate_model(latest_model, best_model, num_games, rounds_per_move):
 
 
 # MAIN
-if len(sys.argv) == 2:
-    latest_model = load_model(sys.argv[1])
-else:
-    latest_model = create_new_model()
-
-try:
-    best_model = load_model('best.h5')
-except OSError:
-    best_model = latest_model
-
-
 cycle = 1
 while True:
+    try:
+        latest_model = load_model('latest.h5')
+    except OSError:
+        latest_model = create_new_model()
+
+    try:
+        best_model = load_model('best.h5')
+    except OSError:
+        best_model = create_new_model()
+
     print('Training cycle {}:'.format(cycle))
     print('Collecting experience...')
-    experience, agent = gain_experience(latest_model, best_model, 1000, 200)
+    experience, agent = gain_experience(latest_model, best_model, 100, 50)
     print('Training model...')
     agent.train(experience, 0.01, 2048)
+    latest_model.save('latest.h5')
     print('Evaluating model...')
-    if evaluate_model(latest_model, best_model, 1000, 200) > 0.55:
+    if evaluate_model(latest_model, best_model, 100, 50) > 0.55:
         print('Replacing best model? YES!')
         latest_model.save('best.h5')
-        best_model = latest_model
     else:
         print('Replacing best model? NO!')
+        
     cycle += 1
