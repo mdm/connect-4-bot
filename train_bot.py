@@ -64,10 +64,10 @@ def simulate_game(red_agent, red_collector, yellow_agent, yellow_collector):
         red_collector.complete_episode(0)
         yellow_collector.complete_episode(0)
 
-def gain_experience(model, num_games, rounds_per_move):
+def gain_experience(latest_model, best_model, num_games, rounds_per_move):
     encoder = zero.ZeroEncoder()
-    red_agent = zero.ZeroAgent(model, encoder, rounds_per_move=rounds_per_move, c=2.0)
-    yellow_agent = zero.ZeroAgent(model, encoder, rounds_per_move=rounds_per_move, c=2.0)
+    red_agent = zero.ZeroAgent(latest_model, encoder, rounds_per_move=rounds_per_move, c=2.0)
+    yellow_agent = zero.ZeroAgent(best_model, encoder, rounds_per_move=rounds_per_move, c=2.0)
     collector1 = zero.ZeroExperienceCollector()
     collector2 = zero.ZeroExperienceCollector()
     red_agent.set_collector(collector1)
@@ -84,16 +84,11 @@ def gain_experience(model, num_games, rounds_per_move):
     experience = zero.ZeroExperienceBuffer.combine_experience([collector1, collector2])
     return experience, red_agent
 
-def evaluate_model(latest_model, num_games, threshold=0.6):
-    try:
-        best_model = load_model('best.h5')
-    except OSError:
-        best_model = latest_model
-
+def evaluate_model(latest_model, best_model, num_games, rounds_per_move):
     encoder = zero.ZeroEncoder()
     bots = {
-        c4types.Player.red: zero.ZeroAgent(latest_model, encoder),
-        c4types.Player.yellow: zero.ZeroAgent(best_model, encoder),
+        c4types.Player.red: zero.ZeroAgent(latest_model, encoder, rounds_per_move=rounds_per_move),
+        c4types.Player.yellow: zero.ZeroAgent(best_model, encoder, rounds_per_move=rounds_per_move),
     }
     wins = {
         c4types.Player.red: 0,
@@ -116,27 +111,33 @@ def evaluate_model(latest_model, num_games, threshold=0.6):
     print('Wins red (latest): {}%'.format(wins[c4types.Player.red] / num_games * 100))
     print('Wins yellow (best): {}%'.format(wins[c4types.Player.yellow] / num_games * 100))
 
-    if wins[c4types.Player.red] / num_games > threshold or latest_model == best_model:
-        print('Replacing best model? YES!')
-        latest_model.save('best.h5')
-    else:
-        print('Replacing best model? NO!')
+    return wins[c4types.Player.red] / num_games
 
 
 # MAIN
 if len(sys.argv) == 2:
-    model = load_model(sys.argv[1])
+    latest_model = load_model(sys.argv[1])
 else:
-    model = create_new_model()
+    latest_model = create_new_model()
+
+try:
+    best_model = load_model('best.h5')
+except OSError:
+    best_model = latest_model
+
 
 cycle = 1
 while True:
     print('Training cycle {}:'.format(cycle))
     print('Collecting experience...')
-    experience, agent = gain_experience(model, 1000, 200)
+    experience, agent = gain_experience(latest_model, best_model, 1000, 200)
     print('Training model...')
     agent.train(experience, 0.01, 2048)
     print('Evaluating model...')
-    evaluate_model(model, 1000)
-    model = load_model('best.h5')
+    if evaluate_model(latest_model, best_model, 1000, 200) > 0.55:
+        print('Replacing best model? YES!')
+        latest_model.save('best.h5')
+        best_model = latest_model
+    else:
+        print('Replacing best model? NO!')
     cycle += 1
