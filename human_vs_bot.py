@@ -6,7 +6,7 @@ from c4bot import c4types
 from c4bot.utils import print_board, print_move
 
 def main():
-    model = load_model('latest.h5')
+    model = load_model('best.h5')
     encoder = agent.ZeroEncoder()
     bot = agent.ZeroAgent(model, encoder)
     game = c4board.GameState.new_game()

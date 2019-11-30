@@ -6,6 +6,7 @@ from keras.models import Model, load_model
 from c4bot import c4types
 from c4bot import c4board
 from c4bot.agent import zero
+from c4bot.utils import print_board, print_move
 
 def create_new_model():
     encoder = zero.ZeroEncoder()
@@ -57,12 +58,15 @@ def simulate_game(red_agent, red_collector, yellow_agent, yellow_collector):
         if game_state.next_player == c4types.Player.red:
             red_collector.complete_episode(-1)
             yellow_collector.complete_episode(1)
+            # print('YELLOW wins')
         else:
             red_collector.complete_episode(1)
             yellow_collector.complete_episode(-1)
+            # print('RED wins')
     else:
         red_collector.complete_episode(0)
         yellow_collector.complete_episode(0)
+    # print_board(game_state.board)
 
 def gain_experience(latest_model, best_model, num_games, rounds_per_move):
     encoder = zero.ZeroEncoder()
@@ -129,12 +133,12 @@ while True:
 
     print('Training cycle {}:'.format(cycle))
     print('Collecting experience...')
-    experience, agent = gain_experience(latest_model, best_model, 100, 50)
+    experience, agent = gain_experience(latest_model, best_model, 500, 100)
     print('Training model...')
     agent.train(experience, 0.01, 2048)
     latest_model.save('latest.h5')
     print('Evaluating model...')
-    if evaluate_model(latest_model, best_model, 100, 50) > 0.55:
+    if evaluate_model(latest_model, best_model, 100, 100) > 0.55:
         print('Replacing best model? YES!')
         latest_model.save('best.h5')
     else:

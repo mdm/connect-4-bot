@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from keras.optimizers import SGD
 
@@ -52,9 +53,13 @@ class ZeroTreeNode:
             if state.is_valid_move(move):
                 self.branches[move] = Branch(p)
         self.children = {}
+        # if parent is None:
+        #     print('Priors', priors)
 
     def moves(self):
-        return self.branches.keys()
+        # return self.branches.keys()
+        moves = self.branches.keys()
+        return random.sample(moves, k=len(moves))
 
     def add_child(self, move, child_node):
         self.children[move] = child_node
