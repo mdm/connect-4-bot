@@ -1,4 +1,7 @@
 import sys
+import os
+import multiprocessing
+import functools
 
 from keras.layers import Input, Conv2D, Flatten, Dense
 from keras.models import Model, load_model
@@ -68,7 +71,19 @@ def simulate_game(red_agent, red_collector, yellow_agent, yellow_collector):
         yellow_collector.complete_episode(0)
     # print_board(game_state.board)
 
-def gain_experience(latest_model, best_model, num_games, rounds_per_move):
+def gain_experience(num_games, rounds_per_move):
+    print('Worker started...')
+
+    try:
+        latest_model = load_model('latest.h5')
+    except OSError:
+        latest_model = create_new_model()
+
+    try:
+        best_model = load_model('best.h5')
+    except OSError:
+        best_model = create_new_model()
+
     encoder = zero.ZeroEncoder()
     red_agent = zero.ZeroAgent(latest_model, encoder, rounds_per_move=rounds_per_move, c=2.0)
     yellow_agent = zero.ZeroAgent(best_model, encoder, rounds_per_move=rounds_per_move, c=2.0)
@@ -118,24 +133,22 @@ def evaluate_model(latest_model, best_model, num_games, rounds_per_move):
     return wins[c4types.Player.red] / num_games
 
 
+def get_collector(result):
+    return result.get()[0]
+
 # MAIN
 cycle = 1
 while True:
-    try:
-        latest_model = load_model('latest.h5')
-    except OSError:
-        latest_model = create_new_model()
-
-    try:
-        best_model = load_model('best.h5')
-    except OSError:
-        best_model = create_new_model()
-
     print('Training cycle {}:'.format(cycle))
     print('Collecting experience...')
-    experience, agent = gain_experience(latest_model, best_model, 500, 100)
+    with multiprocessing.Pool(None) as p:
+        results = [p.apply_async(gain_experience, (20, 16)) for _ in range(os.cpu_count())]
+        p.close()
+        p.join()
+    collectors = [get_collector(result) for result in results]
+    experience = zero.ZeroExperienceBuffer.combine_experience(collectors)
     print('Training model...')
-    agent.train(experience, 0.01, 2048)
+    results[0].get()[1].train(experience, 0.01, 2048)
     latest_model.save('latest.h5')
     print('Evaluating model...')
     if evaluate_model(latest_model, best_model, 100, 100) > 0.55:
