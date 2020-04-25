@@ -2,9 +2,7 @@ import sys
 import os
 import multiprocessing
 import functools
-
-from keras.layers import Input, Conv2D, Flatten, Dense
-from keras.models import Model, load_model
+import itertools
 
 from c4bot import c4types
 from c4bot import c4board
@@ -71,8 +69,17 @@ def simulate_game(red_agent, red_collector, yellow_agent, yellow_collector):
         yellow_collector.complete_episode(0)
     # print_board(game_state.board)
 
-def gain_experience(num_games, rounds_per_move):
-    print('Worker started...')
+def gain_experience(worker_id, num_games, rounds_per_move):
+    print('Worker {} started...'.format(worker_id))
+
+    import keras.backend as K
+    import tensorflow as tf
+    K.set_session(tf.Session())
+
+    from keras.layers import Input, Conv2D, Flatten, Dense
+    global Input, Conv2D, Flatten, Dense
+    from keras.models import Model, load_model
+    global Model, load_model
 
     try:
         latest_model = load_model('latest.h5')
@@ -96,12 +103,12 @@ def gain_experience(num_games, rounds_per_move):
     for i in range(num_games):
         percent = int(i / num_games * 100)
         if percent % 10 == 0 and not percent == old_percent:
-            print('{}%'.format(percent))
+            print('Worker {}: {}%'.format(worker_id, percent))
         old_percent = percent
         simulate_game(red_agent, collector1, yellow_agent, collector2)
 
-    experience = zero.ZeroExperienceBuffer.combine_experience([collector1, collector2])
-    return experience, red_agent
+    experience = [collector1, collector2]
+    return experience
 
 def evaluate_model(latest_model, best_model, num_games, rounds_per_move):
     encoder = zero.ZeroEncoder()
@@ -132,29 +139,58 @@ def evaluate_model(latest_model, best_model, num_games, rounds_per_move):
 
     return wins[c4types.Player.red] / num_games
 
+def train_and_evaluate(experience, num_games, rounds_per_move):
+    import keras.backend as K
+    import tensorflow as tf
+    K.set_session(tf.Session())
+
+    from keras.layers import Input, Conv2D, Flatten, Dense
+    global Input, Conv2D, Flatten, Dense
+    from keras.models import Model, load_model
+    global Model, load_model
+
+    print('Training model...')
+    try:
+        latest_model = load_model('latest.h5')
+    except OSError:
+        latest_model = create_new_model()
+
+    encoder = zero.ZeroEncoder()
+    agent = zero.ZeroAgent(latest_model, encoder)
+    agent.train(experience, 0.01, 2048)
+    latest_model.save('latest.h5')
+
+    print('Evaluating model...')
+    try:
+        best_model = load_model('best.h5')
+    except OSError:
+        best_model = create_new_model()
+
+    if evaluate_model(latest_model, best_model, num_games, rounds_per_move) > 0.55:
+        print('Replacing best model? YES!')
+        latest_model.save('best.h5')
+    else:
+        print('Replacing best model? NO!')
 
 def get_collector(result):
-    return result.get()[0]
+    return result.get()
 
 # MAIN
 cycle = 1
 while True:
     print('Training cycle {}:'.format(cycle))
+
     print('Collecting experience...')
     with multiprocessing.Pool(None) as p:
-        results = [p.apply_async(gain_experience, (20, 16)) for _ in range(os.cpu_count())]
+        results = [p.apply_async(gain_experience, (i, 20, 16)) for i in range(os.cpu_count())]
         p.close()
         p.join()
     collectors = [get_collector(result) for result in results]
-    experience = zero.ZeroExperienceBuffer.combine_experience(collectors)
-    print('Training model...')
-    results[0].get()[1].train(experience, 0.01, 2048)
-    latest_model.save('latest.h5')
-    print('Evaluating model...')
-    if evaluate_model(latest_model, best_model, 100, 100) > 0.55:
-        print('Replacing best model? YES!')
-        latest_model.save('best.h5')
-    else:
-        print('Replacing best model? NO!')
+    flattened_collectors = list(itertools.chain.from_iterable(collectors))
+    experience = zero.ZeroExperienceBuffer.combine_experience(flattened_collectors)
+
+    p = multiprocessing.Process(target=train_and_evaluate, args=(experience, 100, 16))
+    p.start()
+    p.join()
         
     cycle += 1
